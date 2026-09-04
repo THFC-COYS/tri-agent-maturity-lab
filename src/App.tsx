@@ -4,6 +4,7 @@ import {
   describeStageBehavior,
   STAGE_META,
   type MaturityStage,
+  type PlantMode,
   type RunResult,
   type SkinId,
 } from './kernel'
@@ -36,6 +37,8 @@ export default function App() {
   const [prompt, setPrompt] = useState(skinCfg.defaultPrompt)
   const [result, setResult] = useState<RunResult>(emptyResult)
   const [awaiting, setAwaiting] = useState(false)
+  /** Monday Garage bet default: harder soft-plant on Enterprise. */
+  const [plantMode, setPlantMode] = useState<PlantMode>('hard')
 
   const behaviorHint = useMemo(
     () => `${STAGE_META[stage].blurb} · ${describeStageBehavior(stage, skin)}`,
@@ -47,6 +50,7 @@ export default function App() {
     setPrompt(getSkin(next).defaultPrompt)
     setResult(emptyResult)
     setAwaiting(false)
+    if (next === 'enterprise') setPlantMode('hard')
     orchRef.current = createOrchestrator()
   }
 
@@ -59,7 +63,12 @@ export default function App() {
 
   function handleRun() {
     orchRef.current = createOrchestrator()
-    const out = orchRef.current.run({ prompt: prompt.trim(), stage, skin })
+    const out = orchRef.current.run({
+      prompt: prompt.trim(),
+      stage,
+      skin,
+      plantMode: skin === 'enterprise' ? plantMode : undefined,
+    })
     setResult(out)
     setAwaiting(out.awaitingOverride)
   }
@@ -121,6 +130,9 @@ export default function App() {
             onReset={handleReset}
             running={awaiting}
             behaviorHint={behaviorHint}
+            showPlantMode={skin === 'enterprise' && stage === 4}
+            plantMode={plantMode}
+            onPlantModeChange={setPlantMode}
           />
           {awaiting && result.proposedAction ? (
             <OverridePanel action={result.proposedAction} onDecide={handleOverride} />
@@ -133,11 +145,20 @@ export default function App() {
               className={`metrics-banner latency-banner ${result.latency.plantTripped ? 'latency-trip' : result.latency.withinBudget ? 'latency-ok' : 'latency-late'}`}
               aria-label="Breaker-amp latency"
             >
-              <strong>Breaker-amp</strong>
+              <strong>
+                Breaker-amp
+                {result.latency.plantMode === 'hard' ? ' · HARD' : ''}
+              </strong>
               <span>sensor→gate {result.latency.sensorToGateMs}ms</span>
               <span>gate→shed {result.latency.gateToShedMs}ms</span>
               <span>total {result.latency.sensorToShedMs}ms</span>
               <span>budget {result.latency.tripBudgetMs}ms</span>
+              {result.latency.plantMode === 'hard' ? (
+                <span>
+                  beat curve:{' '}
+                  {result.latency.shedBeatCurve ? 'yes' : 'no'}
+                </span>
+              ) : null}
             </div>
           ) : null}
           {result.metrics ? (

@@ -203,3 +203,24 @@ textarea, input[type='text'] {
 .latency-banner.latency-late { border-color: #a16207; background: #422006; color: #fde68a; }
 .latency-banner.latency-trip { border-color: #7f1d1d; background: #450a0a; color: #fecaca; }
 .latency-amps { margin: 0 0 0.35rem; }
+
+.plant-mode-toggle {
+  display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
+  margin: 0.35rem 0 0.15rem;
+}
+.plant-mode-label {
+  font-size: 0.78rem; color: var(--muted); margin-right: 0.25rem;
+}
+.btn.chip {
+  font-size: 0.78rem; padding: 0.25rem 0.65rem; border-radius: 999px;
+  background: var(--bg-elev); border: 1px solid var(--border); color: var(--muted);
+  cursor: pointer;
+}
+.btn.chip.active {
+  color: #041018; background: var(--warn); border-color: transparent; font-weight: 650;
+}
+.btn.chip:disabled { opacity: 0.5; cursor: not-allowed; }
+.status-hard {
+  color: #041018; background: var(--warn); border-color: transparent;
+  font-weight: 700;
+}

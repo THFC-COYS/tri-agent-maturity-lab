@@ -1,3 +1,5 @@
+import type { PlantMode } from '../kernel/types'
+
 interface Props {
   prompt: string
   onPromptChange: (v: string) => void
@@ -6,6 +8,10 @@ interface Props {
   onReset: () => void
   running: boolean
   behaviorHint: string
+  /** Enterprise rack path: free vs hard soft-plant. */
+  plantMode?: PlantMode
+  onPlantModeChange?: (mode: PlantMode) => void
+  showPlantMode?: boolean
 }
 
 export function ControlBar({
@@ -16,6 +22,9 @@ export function ControlBar({
   onReset,
   running,
   behaviorHint,
+  plantMode = 'free',
+  onPlantModeChange,
+  showPlantMode = false,
 }: Props) {
   return (
     <div className="control-bar">
@@ -30,6 +39,27 @@ export function ControlBar({
         />
       </label>
       <p className="behavior-hint muted">{behaviorHint}</p>
+      {showPlantMode && onPlantModeChange ? (
+        <div className="plant-mode-toggle" role="group" aria-label="Soft-plant mode">
+          <span className="plant-mode-label">Soft-plant</span>
+          <button
+            type="button"
+            className={`btn chip ${plantMode === 'free' ? 'active' : ''}`}
+            onClick={() => onPlantModeChange('free')}
+            disabled={running}
+          >
+            Free (~50 ms)
+          </button>
+          <button
+            type="button"
+            className={`btn chip ${plantMode === 'hard' ? 'active' : ''}`}
+            onClick={() => onPlantModeChange('hard')}
+            disabled={running}
+          >
+            Hard mode
+          </button>
+        </div>
+      ) : null}
       <div className="control-actions">
         <button type="button" className="btn ghost" onClick={onReset} disabled={running}>
           Reset

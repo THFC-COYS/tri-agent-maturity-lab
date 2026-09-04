@@ -11,13 +11,15 @@ export function LatencyPanel({ latency }: Props) {
         <h3>Breaker-amp latency</h3>
         <p className="muted">
           Enterprise Stage-4 rack-protection publishes sensor→gate→shed ms against a
-          soft-plant trip budget. Higher-Ed Stage-4 still uses human override (no
-          breaker curve).
+          soft-plant trip budget. Toggle hard mode for noise, sensor delay, and a
+          tighter curve. Higher-Ed Stage-4 still uses human override (no breaker
+          curve).
         </p>
       </div>
     )
   }
 
+  const hard = latency.plantMode === 'hard'
   const status = latency.plantTripped
     ? 'trip'
     : latency.withinBudget
@@ -28,6 +30,7 @@ export function LatencyPanel({ latency }: Props) {
     <div className="panel latency" aria-label="Breaker-amp latency">
       <h3>
         Breaker-amp latency{' '}
+        {hard ? <span className="latency-status status-hard">HARD MODE</span> : null}{' '}
         <span className={`latency-status status-${status}`}>
           {latency.plantTripped
             ? 'TRIPPED'
@@ -56,9 +59,20 @@ export function LatencyPanel({ latency }: Props) {
       </div>
       <p className="latency-amps muted small">
         Load {latency.loadAmpsAtSensor} A → {latency.loadAmpsAfterShed} A (limit{' '}
-        {latency.breakerLimitAmps} A) · soft-plant time-to-trip{' '}
-        {latency.timeToTripMs} ms · shed before trip:{' '}
-        {latency.shedBeforeTrip ? 'yes' : 'no'}
+        {latency.breakerLimitAmps} A) ·{' '}
+        {hard ? (
+          <>
+            true time-to-trip {latency.trueTimeToTripMs} ms · delay{' '}
+            {latency.sensorDelayMs} ms · noise {latency.sensorNoiseAmps} A · shed
+            beat curve under noise/delay:{' '}
+            <strong>{latency.shedBeatCurve ? 'yes' : 'no'}</strong>
+          </>
+        ) : (
+          <>
+            soft-plant time-to-trip {latency.timeToTripMs} ms · shed before trip:{' '}
+            {latency.shedBeforeTrip ? 'yes' : 'no'}
+          </>
+        )}
       </p>
       <p className="muted small">{latency.curveNote}</p>
     </div>
