@@ -118,3 +118,38 @@ flowchart TB
   Audit --> Trace
 ```
 
+## Skins
+
+- **Enterprise Ops** — pipeline recovery, AE/SDR handoffs, renewals
+- **Higher Education** — STEM retention, advising outreach, early alerts
+
+Same kernel. Different facts, verbs, and copy.
+
+## Quick start
+
+```bash
+npm install
+npm run dev
+```
+
+Open the URL Vite prints (usually `http://localhost:5173`).
+
+```bash
+npm test
+npm run build
+```
+
+No `.env`. No API keys. No backend.
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `npm run dev` | Vite dev server |
+| `npm test` | Vitest (deterministic kernel / agents / harness) |
+| `npm run build` | `tsc -b` + production bundle |
+| `npm run lint` | oxlint |
+
+## License
+
+MIT © Greg Lucas
