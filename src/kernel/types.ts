@@ -67,6 +67,8 @@ export interface ProposedAction {
 }
 
 
+export type PlantMode = 'free' | 'hard'
+
 export interface BreakerLatencyReport {
   sensorTs: number
   gateTs: number
@@ -84,6 +86,12 @@ export interface BreakerLatencyReport {
   withinBudget: boolean
   plantTripped: boolean
   curveNote: string
+  plantMode: PlantMode
+  trueTimeToTripMs: number
+  sensorDelayMs: number
+  sensorNoiseAmps: number
+  /** Under hard mode: did shed beat true physics despite noise/delay? */
+  shedBeatCurve: boolean
 }
 
 export interface AuditEntry {
@@ -114,6 +122,14 @@ export interface RunInput {
   skin: SkinId
   /** Test/demo: artificial delay (ms) before shed — fail path vs trip budget. */
   injectDelayMs?: number
+  /** Soft-plant difficulty: free (~50ms) or hard (noise/delay/tighter curve). */
+  plantMode?: PlantMode
+  /** Deterministic RNG for hard-plant sensor noise/delay (tests). */
+  plantRng?: () => number
+  /** Force sensor delay ms in hard plant (tests). */
+  forceSensorDelayMs?: number
+  /** Force sensor noise amps in hard plant (tests). */
+  forceNoiseAmps?: number
 }
 
 export interface EvalMetrics {

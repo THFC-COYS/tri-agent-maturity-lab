@@ -17,6 +17,7 @@ import {
   busyWaitMs,
   createBreakerPlant,
   nowMs,
+  type PlantMode,
 } from './breakerPlant'
 import { runAssistant, runExecutor, runPlanner, runResearcher, runRobot, callTool } from '../agents'
 import { getSkin } from '../skins'
@@ -462,11 +463,18 @@ export class Orchestrator {
     input: RunInput,
     action: ProposedAction,
   ): RunResult {
-    const plant = createBreakerPlant()
+    const plantMode: PlantMode = input.plantMode ?? 'free'
+    const plant = createBreakerPlant({
+      mode: plantMode,
+      rng: input.plantRng,
+      forceSensorDelayMs: input.forceSensorDelayMs,
+      forceNoiseAmps: input.forceNoiseAmps,
+    })
     const runStart = nowMs()
 
     const sensorTs = nowMs()
     const reading = plant.readSensor(sensorTs - runStart)
+    const modeTag = plantMode === 'hard' ? 'HARD' : 'free'
     this.bus.emit(
       createEvent({
         kind: 'sensor.read',
@@ -474,12 +482,17 @@ export class Orchestrator {
         skin: input.skin,
         agent: 'researcher',
         phase: 'assess',
-        summary: `Sensor: rack load ${reading.loadAmps} A / ${reading.breakerLimitAmps} A (headroom ${reading.headroomAmps} A, ~${reading.timeToTripMs} ms to trip)`,
-        detail: { reading },
+        summary:
+          plantMode === 'hard'
+            ? `Sensor [${modeTag}]: reported ${reading.loadAmps} A (true ${reading.trueLoadAmps} A) / ${reading.breakerLimitAmps} A · delay ${reading.sensorDelayMs} ms · noise ${reading.sensorNoiseAmps} A · true ~${reading.trueTimeToTripMs} ms to trip`
+            : `Sensor: rack load ${reading.loadAmps} A / ${reading.breakerLimitAmps} A (headroom ${reading.headroomAmps} A, ~${reading.timeToTripMs} ms to trip)`,
+        detail: { reading, plantMode },
       }),
     )
     this.bus.publishSystem(
-      `Rack sensor: ${reading.loadAmps} A rising toward ${reading.breakerLimitAmps} A breaker limit. Soft-plant time-to-trip ≈ ${reading.timeToTripMs} ms.`,
+      plantMode === 'hard'
+        ? `Rack sensor [hard soft-plant]: reported ${reading.loadAmps} A (true ${reading.trueLoadAmps} A) toward ${reading.breakerLimitAmps} A. Delay ${reading.sensorDelayMs} ms · noise ${reading.sensorNoiseAmps} A · true time-to-trip ≈ ${reading.trueTimeToTripMs} ms.`
+        : `Rack sensor: ${reading.loadAmps} A rising toward ${reading.breakerLimitAmps} A breaker limit. Soft-plant time-to-trip ≈ ${reading.timeToTripMs} ms.`,
     )
 
     const gate = evaluatePolicyGate(action)
@@ -561,8 +574,9 @@ export class Orchestrator {
     const shedTs = nowMs()
     const shed = plant.applyShed(SHED_REDUCTION_AMPS)
     const elapsed = shedTs - sensorTs
-    // Honest soft-plant trip: shed after time-to-trip means the breaker would have opened.
-    const tripped = elapsed >= reading.timeToTripMs
+    // Trip on true physics (hard mode may report optimistic noisy/delayed amps).
+    const tripped =
+      elapsed >= reading.trueTimeToTripMs || plant.wouldHaveTripped(elapsed)
 
     this.bus.emit(
       createEvent({
@@ -621,14 +635,16 @@ export class Orchestrator {
       decision: 'allowed',
       actor: 'policy-gate+executor+robot',
       detail: tripped
-        ? `Shed after trip window (${latency.sensorToShedMs} ms > ${latency.timeToTripMs} ms). Soft-plant tripped.`
-        : `Shed before trip (${latency.sensorToShedMs} ms ≤ budget ${latency.tripBudgetMs} ms). Load now ${latency.loadAmpsAfterShed} A.`,
+        ? `Shed after true trip window (${latency.sensorToShedMs} ms > ${latency.trueTimeToTripMs} ms). Soft-plant tripped.`
+        : `Shed before trip (${latency.sensorToShedMs} ms ≤ budget ${latency.tripBudgetMs} ms; beat curve ${latency.shedBeatCurve}). Load now ${latency.loadAmpsAfterShed} A.`,
     })
 
     this.bus.publishSystem(
       tripped
-        ? `Rack protection LATE: sensor→shed ${latency.sensorToShedMs} ms exceeded soft-plant trip window (${latency.timeToTripMs} ms). The rack would trip.`
-        : `Rack never trips in this soft-plant run: agent shed in ${latency.sensorToShedMs} ms (budget ${latency.tripBudgetMs} ms). Load ${latency.loadAmpsAtSensor} A → ${latency.loadAmpsAfterShed} A.`,
+        ? `Rack protection LATE [${modeTag}]: sensor→shed ${latency.sensorToShedMs} ms exceeded true trip window (${latency.trueTimeToTripMs} ms). Soft-plant would trip.`
+        : plantMode === 'hard'
+          ? `Hard soft-plant: shed beat the curve under noise/delay — ${latency.sensorToShedMs} ms (true window ${latency.trueTimeToTripMs} ms, budget ${latency.tripBudgetMs} ms). Load ${latency.loadAmpsAtSensor} A → ${latency.loadAmpsAfterShed} A.`
+          : `Rack never trips in this soft-plant run: agent shed in ${latency.sensorToShedMs} ms (budget ${latency.tripBudgetMs} ms). Load ${latency.loadAmpsAtSensor} A → ${latency.loadAmpsAfterShed} A.`,
     )
 
     this.bus.emit(
@@ -647,8 +663,10 @@ export class Orchestrator {
       action,
       false,
       tripped
-        ? `Soft-plant trip: shed at ${latency.sensorToShedMs} ms after sensor (window ${latency.timeToTripMs} ms).`
-        : `Rack protected: sensor→gate ${latency.sensorToGateMs} ms · gate→shed ${latency.gateToShedMs} ms · total ${latency.sensorToShedMs} ms (budget ${latency.tripBudgetMs} ms).`,
+        ? `Soft-plant trip [${modeTag}]: shed at ${latency.sensorToShedMs} ms after sensor (true window ${latency.trueTimeToTripMs} ms).`
+        : plantMode === 'hard'
+          ? `Hard soft-plant protected: sensor→gate ${latency.sensorToGateMs} ms · gate→shed ${latency.gateToShedMs} ms · total ${latency.sensorToShedMs} ms (budget ${latency.tripBudgetMs} ms) · shed beat curve: ${latency.shedBeatCurve ? 'yes' : 'no'}.`
+          : `Rack protected: sensor→gate ${latency.sensorToGateMs} ms · gate→shed ${latency.gateToShedMs} ms · total ${latency.sensorToShedMs} ms (budget ${latency.tripBudgetMs} ms).`,
       { executed: true, stage: 4, latency, overrideApproved: null },
     )
   }

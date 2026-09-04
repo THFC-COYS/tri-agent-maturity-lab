@@ -13,6 +13,6 @@ export const enterpriseSkin: ScenarioConfig = {
   sampleFacts: [
     'Row B PDU trending 38 A toward a 48 A breaker limit (soft-plant).',
     'Non-critical batch jobs on racks B3–B5 can shed ~16 A within policy.',
-    'Assumed trip budget: 50 ms from sensor sample (sim curve, not field hardware).',
+    'Assumed trip budget: 50 ms free / ~22 ms hard soft-plant (sim curve, not field hardware).',
   ],
 }
