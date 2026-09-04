@@ -8,10 +8,10 @@ export interface StubTool {
 
 const KNOWLEDGE: Record<string, string[]> = {
   enterprise: [
-    'Q3 pipeline velocity is down 12% vs plan in the West region.',
-    'Top blocker: handoff lag between SDR and AE (avg 3.4 days).',
-    'Competitor NovaCorp launched a mid-market bundle last month.',
-    'Renewal risk concentrated in accounts with <2 product touches / quarter.',
+    'Row B PDU trending 38 A toward a 48 A breaker limit (soft-plant).',
+    'Non-critical batch jobs on racks B3–B5 can shed ~16 A within policy.',
+    'Assumed trip budget: 50 ms from sensor sample (sim curve, not field hardware).',
+    'Stage-4 gate may auto-dispatch shed on the breaker-critical path; audit still records.',
   ],
   highered: [
     'Fall census shows 6% decline in continuing students in STEM majors.',
@@ -88,7 +88,7 @@ export const stubTools: StubTool[] = [
       'Stub robot/actuator — physical-digital handoff (no real hardware).',
     run: (args) => {
       const title = String(args.title ?? 'action')
-      const channel = String(args.channel ?? 'ops-floor-actuator')
+      const channel = String(args.channel ?? 'rack-shed-actuator')
       const id = `ACT-${Math.abs(hash(`${channel}:${title}`)) % 9000 + 1000}`
       return {
         ok: true,

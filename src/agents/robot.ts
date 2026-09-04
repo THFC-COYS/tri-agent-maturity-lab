@@ -18,7 +18,7 @@ export function runRobot(
   skin: SkinId,
 ): RobotOutput {
   const channel =
-    skin === 'highered' ? 'campus-kiosk-actuator' : 'ops-floor-actuator'
+    skin === 'highered' ? 'campus-kiosk-actuator' : 'rack-shed-actuator'
   const result = callTool('dispatch_actuator', {
     title: action.title,
     channel,

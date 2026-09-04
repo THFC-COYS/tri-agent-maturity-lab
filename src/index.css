@@ -188,3 +188,18 @@ textarea, input[type='text'] {
 }
 .metrics-banner strong { color: #a5b4fc; }
 .bubble-agent.agent-robot { border-left: 3px solid #fb7185; }
+
+.latency-status {
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border);
+}
+.status-ok { color: #041018; background: var(--ok); border-color: transparent; }
+.status-late { color: #041018; background: var(--warn); border-color: transparent; }
+.status-trip { color: #fff; background: var(--danger); border-color: transparent; }
+.latency-banner.latency-ok { border-color: #14532d; background: #052e1a; color: #bbf7d0; }
+.latency-banner.latency-late { border-color: #a16207; background: #422006; color: #fde68a; }
+.latency-banner.latency-trip { border-color: #7f1d1d; background: #450a0a; color: #fecaca; }
+.latency-amps { margin: 0 0 0.35rem; }

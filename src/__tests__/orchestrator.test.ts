@@ -51,12 +51,12 @@ describe('orchestrator stage behavior', () => {
     expect(result.audit).toHaveLength(0)
   })
 
-  it('stage 4: policy gate + audit + human override before final action', () => {
+  it('stage 4 higher-ed: policy gate + audit + human override before final action', () => {
     const orch = createOrchestrator()
     const paused = orch.run({
-      prompt: 'Launch urgent recovery play',
+      prompt: 'Launch urgent retention outreach',
       stage: 4,
-      skin: 'enterprise',
+      skin: 'highered',
     })
     expect(paused.awaitingOverride).toBe(true)
     expect(paused.proposedAction).not.toBeNull()
@@ -66,6 +66,7 @@ describe('orchestrator stage behavior', () => {
     expect(paused.events.some((e) => e.kind === 'policy.check')).toBe(true)
     expect(paused.audit.length).toBeGreaterThan(0)
     expect(paused.events.some((e) => e.kind === 'action.executed')).toBe(false)
+    expect(paused.latency).toBeNull()
 
     const approved = orch.resolveOverride({ approved: true, note: 'Looks good' })
     expect(approved.awaitingOverride).toBe(false)
@@ -76,16 +77,29 @@ describe('orchestrator stage behavior', () => {
     expect(approved.audit.some((a) => a.decision === 'approved')).toBe(true)
   })
 
-  it('stage 4 reject path records override without execution', () => {
+  it('stage 4 higher-ed reject path records override without execution', () => {
     const orch = createOrchestrator()
     orch.run({
-      prompt: 'Critical irreversible purge of accounts',
+      prompt: 'Critical irreversible purge of student records',
       stage: 4,
-      skin: 'enterprise',
+      skin: 'highered',
     })
     const rejected = orch.resolveOverride({ approved: false, note: 'Too risky' })
     expect(rejected.events.some((e) => e.kind === 'action.executed')).toBe(false)
     expect(rejected.audit.some((a) => a.decision === 'overridden')).toBe(true)
     expect(rejected.finalSummary).toMatch(/rejected/i)
+  })
+
+  it('stage 4 enterprise: rack-protection auto-shed with latency (no human wait)', () => {
+    const orch = createOrchestrator()
+    const result = orch.run({
+      prompt: 'Row B rack load climbing toward breaker limit',
+      stage: 4,
+      skin: 'enterprise',
+    })
+    expect(result.awaitingOverride).toBe(false)
+    expect(result.latency).not.toBeNull()
+    expect(result.events.some((e) => e.kind === 'action.executed')).toBe(true)
+    expect(result.events.some((e) => e.kind === 'breaker.latency')).toBe(true)
   })
 })

@@ -98,6 +98,7 @@ flowchart TB
     T3[draft_plan]
     T4[simulate_action]
     T5[dispatch_actuator]
+    T6[breaker soft-plant]
   end
 
   Skin --> Orch
@@ -110,6 +111,7 @@ flowchart TB
   Orch --> Human
   AI --> Tools
   Robot --> T5
+  Orch --> T6
   Bus --> Conv
   Bus --> Trace
   Orch --> Audit
@@ -120,7 +122,7 @@ flowchart TB
 
 ## Skins
 
-- **Enterprise Ops** — pipeline recovery, AE/SDR handoffs, renewals
+- **Enterprise Ops** — rack protection, breaker-amp headroom, governed shed
 - **Higher Education** — STEM retention, advising outreach, early alerts
 
 Same kernel. Different facts, verbs, and copy.
@@ -153,3 +155,16 @@ No `.env`. No API keys. No backend.
 ## License
 
 MIT © Greg Lucas
+
+## Breaker-amp latency alpha
+
+Soft-plant digital alpha: sensor to Stage-4 policy gate to shed, measured in real ms against an assumed 50 ms budget.
+
+Story: agent sheds load before the soft-plant opens.
+- Plant: stub load toward 48 A with ~50 ms headroom.
+- Path: Enterprise Stage-4 gated auto shed; audit on.
+- Report: published ms for sensor/gate/shed vs 50 ms budget.
+- Honesty: soft-plant only, not field hardware.
+
+Higher-Ed Stage-4 keeps human override.
+Demo: zero API keys. Tests cover happy path and delayed fail path.
