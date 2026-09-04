@@ -16,12 +16,14 @@ export type EventKind =
   | 'agent.message'
   | 'tool.called'
   | 'tool.result'
+  | 'sensor.read'
   | 'policy.check'
   | 'policy.blocked'
   | 'human.override.requested'
   | 'human.override.decision'
   | 'action.proposed'
   | 'action.executed'
+  | 'breaker.latency'
   | 'run.completed'
   | 'audit.entry'
 
@@ -64,6 +66,26 @@ export interface ProposedAction {
   reversible: boolean
 }
 
+
+export interface BreakerLatencyReport {
+  sensorTs: number
+  gateTs: number
+  shedTs: number
+  sensorToGateMs: number
+  gateToShedMs: number
+  sensorToShedMs: number
+  tripBudgetMs: number
+  timeToTripMs: number
+  loadAmpsAtSensor: number
+  breakerLimitAmps: number
+  shedReductionAmps: number
+  loadAmpsAfterShed: number
+  shedBeforeTrip: boolean
+  withinBudget: boolean
+  plantTripped: boolean
+  curveNote: string
+}
+
 export interface AuditEntry {
   id: string
   ts: number
@@ -90,6 +112,8 @@ export interface RunInput {
   prompt: string
   stage: MaturityStage
   skin: SkinId
+  /** Test/demo: artificial delay (ms) before shed — fail path vs trip budget. */
+  injectDelayMs?: number
 }
 
 export interface EvalMetrics {
@@ -109,6 +133,8 @@ export interface RunResult {
   awaitingOverride: boolean
   finalSummary: string
   metrics: EvalMetrics | null
+  /** Soft-plant breaker-amp latency (Enterprise Stage-4 rack-protection). */
+  latency: BreakerLatencyReport | null
 }
 
 export interface OverrideDecision {

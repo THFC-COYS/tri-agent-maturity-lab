@@ -3,15 +3,16 @@ import type { ScenarioConfig } from '../../kernel/types'
 export const enterpriseSkin: ScenarioConfig = {
   skin: 'enterprise',
   title: 'Enterprise Ops',
-  subtitle: 'Revenue operations · pipeline recovery · accountable execution',
-  promptPlaceholder: 'Describe an ops problem (e.g. West region pipeline down 12%)…',
+  subtitle: 'Rack protection · breaker-amp headroom · governed shed',
+  promptPlaceholder:
+    'Describe a rack load event (e.g. row B rising toward breaker limit)…',
   defaultPrompt:
-    'West region pipeline velocity is down 12%. Propose a recovery play for AE/SDR handoffs and at-risk renewals.',
-  contextLabel: 'Commercial context',
-  actionVerb: 'Execute play',
+    'Row B rack load is climbing toward the breaker amp limit. Shed non-critical load before the soft-plant trip curve — keep the rack online.',
+  contextLabel: 'DC / ops context',
+  actionVerb: 'Shed load',
   sampleFacts: [
-    'Q3 pipeline velocity is down 12% vs plan in the West region.',
-    'Top blocker: handoff lag between SDR and AE (avg 3.4 days).',
-    'Competitor NovaCorp launched a mid-market bundle last month.',
+    'Row B PDU trending 38 A toward a 48 A breaker limit (soft-plant).',
+    'Non-critical batch jobs on racks B3–B5 can shed ~16 A within policy.',
+    'Assumed trip budget: 50 ms from sensor sample (sim curve, not field hardware).',
   ],
 }

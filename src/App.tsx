@@ -15,6 +15,7 @@ import { TracePanel } from './ui/TracePanel'
 import { ControlBar } from './ui/ControlBar'
 import { OverridePanel } from './ui/OverridePanel'
 import { EvalPanel } from './ui/EvalPanel'
+import { LatencyPanel } from './ui/LatencyPanel'
 
 const emptyResult: RunResult = {
   messages: [],
@@ -24,6 +25,7 @@ const emptyResult: RunResult = {
   awaitingOverride: false,
   finalSummary: '',
   metrics: null,
+  latency: null,
 }
 
 export default function App() {
@@ -126,6 +128,18 @@ export default function App() {
           {result.finalSummary ? (
             <div className="summary-banner">{result.finalSummary}</div>
           ) : null}
+          {result.latency ? (
+            <div
+              className={`metrics-banner latency-banner ${result.latency.plantTripped ? 'latency-trip' : result.latency.withinBudget ? 'latency-ok' : 'latency-late'}`}
+              aria-label="Breaker-amp latency"
+            >
+              <strong>Breaker-amp</strong>
+              <span>sensor→gate {result.latency.sensorToGateMs}ms</span>
+              <span>gate→shed {result.latency.gateToShedMs}ms</span>
+              <span>total {result.latency.sensorToShedMs}ms</span>
+              <span>budget {result.latency.tripBudgetMs}ms</span>
+            </div>
+          ) : null}
           {result.metrics ? (
             <div className="metrics-banner" aria-label="Run evaluation">
               <strong>Eval {result.metrics.band}</strong>
@@ -138,6 +152,7 @@ export default function App() {
           <ConversationPanel messages={result.messages} />
         </div>
         <div className="col side">
+          <LatencyPanel latency={result.latency} />
           <EvalPanel metrics={result.metrics} />
           <TracePanel events={result.events} audit={result.audit} />
         </div>

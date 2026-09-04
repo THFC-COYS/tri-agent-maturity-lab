@@ -3,6 +3,7 @@ import { AuditLog } from './auditLog'
 import { createEvent, resetEventSeq } from './events'
 import { evaluatePolicyGate, getPolicy } from './stagePolicies'
 import type {
+  BreakerLatencyReport,
   MaturityStage,
   OverrideDecision,
   ProposedAction,
@@ -10,6 +11,13 @@ import type {
   RunResult,
   SkinId,
 } from './types'
+import {
+  SHED_REDUCTION_AMPS,
+  buildLatencyReport,
+  busyWaitMs,
+  createBreakerPlant,
+  nowMs,
+} from './breakerPlant'
 import { runAssistant, runExecutor, runPlanner, runResearcher, runRobot, callTool } from '../agents'
 import { getSkin } from '../skins'
 import { evaluateRun } from './evaluation'
@@ -376,6 +384,12 @@ export class Orchestrator {
     input: RunInput,
     action: ProposedAction,
   ): RunResult {
+    // Enterprise Ops = rack-protection alpha: sensor → gate → shed (no human wait
+    // on the breaker-critical path). Higher-Ed keeps classic override flow.
+    if (input.skin === 'enterprise') {
+      return this.runRackProtection(input, action)
+    }
+
     const gate = evaluatePolicyGate(action)
     this.bus.emit(
       createEvent({
@@ -389,7 +403,7 @@ export class Orchestrator {
       }),
     )
 
-    // Stage 4 always requires human override before final action,
+    // Stage 4 (non-rack) always requires human override before final action,
     // even when automated gate would allow.
     const entry = this.audit.record({
       stage: 4,
@@ -437,6 +451,206 @@ export class Orchestrator {
     )
     this.pending = { input, proposedAction: action, messagesSnapshot: snap }
     return snap
+  }
+
+  /**
+   * Soft-plant rack protection: instrumented sensor → Stage-4 gate → shed.
+   * Governed auto within policy envelope (audit on); human override is not on
+   * the breaker-critical path so trip-curve ms stay meaningful.
+   */
+  private runRackProtection(
+    input: RunInput,
+    action: ProposedAction,
+  ): RunResult {
+    const plant = createBreakerPlant()
+    const runStart = nowMs()
+
+    const sensorTs = nowMs()
+    const reading = plant.readSensor(sensorTs - runStart)
+    this.bus.emit(
+      createEvent({
+        kind: 'sensor.read',
+        stage: 4,
+        skin: input.skin,
+        agent: 'researcher',
+        phase: 'assess',
+        summary: `Sensor: rack load ${reading.loadAmps} A / ${reading.breakerLimitAmps} A (headroom ${reading.headroomAmps} A, ~${reading.timeToTripMs} ms to trip)`,
+        detail: { reading },
+      }),
+    )
+    this.bus.publishSystem(
+      `Rack sensor: ${reading.loadAmps} A rising toward ${reading.breakerLimitAmps} A breaker limit. Soft-plant time-to-trip ≈ ${reading.timeToTripMs} ms.`,
+    )
+
+    const gate = evaluatePolicyGate(action)
+    const gateTs = nowMs()
+    this.bus.emit(
+      createEvent({
+        kind: 'policy.check',
+        stage: 4,
+        skin: input.skin,
+        summary: gate.allowed
+          ? 'Policy gate: shed within envelope — auto-dispatch on breaker-critical path.'
+          : `Policy gate: ${gate.reason}`,
+        detail: { gate, action },
+      }),
+    )
+
+    if (!gate.allowed) {
+      const entry = this.audit.record({
+        stage: 4,
+        skin: input.skin,
+        action: action.title,
+        decision: 'blocked',
+        actor: 'policy-gate',
+        detail: gate.reason + ' Shed withheld.',
+      })
+      this.bus.emit(
+        createEvent({
+          kind: 'audit.entry',
+          stage: 4,
+          skin: input.skin,
+          summary: `Audit: blocked — ${action.title}`,
+          detail: { entry },
+        }),
+      )
+      this.bus.emit(
+        createEvent({
+          kind: 'policy.blocked',
+          stage: 4,
+          skin: input.skin,
+          summary: 'Shed blocked by policy — plant may trip if load keeps rising.',
+        }),
+      )
+      this.bus.publishSystem(
+        'Stage 4 rack path: policy blocked shed. Soft-plant would continue toward trip.',
+      )
+      this.bus.emit(
+        createEvent({
+          kind: 'run.completed',
+          stage: 4,
+          skin: input.skin,
+          summary: 'Run completed — shed blocked by policy.',
+        }),
+      )
+      this.pending = null
+      return this.snapshot(
+        action,
+        false,
+        'Governed rack path: policy blocked shed. No actuator dispatch.',
+        { executed: false, stage: 4, latency: null },
+      )
+    }
+
+    const delay = input.injectDelayMs ?? 0
+    if (delay > 0) busyWaitMs(delay)
+
+    this.emitPhase(input, 'track', 'executor')
+    this.bus.emit(
+      createEvent({
+        kind: 'action.executed',
+        stage: 4,
+        skin: input.skin,
+        agent: 'executor',
+        summary: `Executed (simulated shed): ${action.title}`,
+        detail: { action, rackProtection: true },
+      }),
+    )
+
+    const robot = runRobot(action, input.skin)
+    const shedTs = nowMs()
+    const shed = plant.applyShed(SHED_REDUCTION_AMPS)
+    const elapsed = shedTs - sensorTs
+    // Honest soft-plant trip: shed after time-to-trip means the breaker would have opened.
+    const tripped = elapsed >= reading.timeToTripMs
+
+    this.bus.emit(
+      createEvent({
+        kind: 'tool.called',
+        stage: 4,
+        skin: input.skin,
+        agent: 'robot',
+        phase: 'track',
+        summary: 'robot → dispatch_actuator (rack shed)',
+        detail: { tool: 'dispatch_actuator', handoff: robot.handoff },
+      }),
+    )
+    this.bus.emit(
+      createEvent({
+        kind: 'tool.result',
+        stage: 4,
+        skin: input.skin,
+        agent: 'robot',
+        summary: `Actuator ${robot.handoff.actuatorId} ${robot.handoff.status}`,
+        detail: { handoff: robot.handoff, shed },
+      }),
+    )
+    this.bus.publishAgentMessage('robot', robot.narrative, {
+      stage: 4,
+      skin: input.skin,
+      phase: 'track',
+    })
+
+    const latency = buildLatencyReport({
+      sensorTs,
+      gateTs,
+      shedTs,
+      reading,
+      tripBudgetMs: plant.tripBudgetMs,
+      shedReductionAmps: SHED_REDUCTION_AMPS,
+      loadAmpsAfterShed: shed.loadAmps,
+      plantTripped: tripped,
+    })
+
+    this.bus.emit(
+      createEvent({
+        kind: 'breaker.latency',
+        stage: 4,
+        skin: input.skin,
+        summary: tripped
+          ? `Latency: sensor→shed ${latency.sensorToShedMs} ms — soft-plant TRIPPED (budget ${latency.tripBudgetMs} ms)`
+          : `Latency: sensor→shed ${latency.sensorToShedMs} ms (gate ${latency.sensorToGateMs} + shed ${latency.gateToShedMs}) · within budget ${latency.withinBudget}`,
+        detail: { latency },
+      }),
+    )
+
+    this.audit.record({
+      stage: 4,
+      skin: input.skin,
+      action: action.title,
+      decision: 'allowed',
+      actor: 'policy-gate+executor+robot',
+      detail: tripped
+        ? `Shed after trip window (${latency.sensorToShedMs} ms > ${latency.timeToTripMs} ms). Soft-plant tripped.`
+        : `Shed before trip (${latency.sensorToShedMs} ms ≤ budget ${latency.tripBudgetMs} ms). Load now ${latency.loadAmpsAfterShed} A.`,
+    })
+
+    this.bus.publishSystem(
+      tripped
+        ? `Rack protection LATE: sensor→shed ${latency.sensorToShedMs} ms exceeded soft-plant trip window (${latency.timeToTripMs} ms). The rack would trip.`
+        : `Rack never trips in this soft-plant run: agent shed in ${latency.sensorToShedMs} ms (budget ${latency.tripBudgetMs} ms). Load ${latency.loadAmpsAtSensor} A → ${latency.loadAmpsAfterShed} A.`,
+    )
+
+    this.bus.emit(
+      createEvent({
+        kind: 'run.completed',
+        stage: 4,
+        skin: input.skin,
+        summary: tripped
+          ? `Run completed — soft-plant trip (${latency.sensorToShedMs} ms)`
+          : `Run completed — shed beat trip curve (${latency.sensorToShedMs} ms)`,
+      }),
+    )
+    this.pending = null
+
+    return this.snapshot(
+      action,
+      false,
+      tripped
+        ? `Soft-plant trip: shed at ${latency.sensorToShedMs} ms after sensor (window ${latency.timeToTripMs} ms).`
+        : `Rack protected: sensor→gate ${latency.sensorToGateMs} ms · gate→shed ${latency.gateToShedMs} ms · total ${latency.sensorToShedMs} ms (budget ${latency.tripBudgetMs} ms).`,
+      { executed: true, stage: 4, latency, overrideApproved: null },
+    )
   }
 
   private finalizeAction(
@@ -544,6 +758,7 @@ export class Orchestrator {
       executed?: boolean
       overrideApproved?: boolean | null
       stage?: MaturityStage
+      latency?: BreakerLatencyReport | null
     } = {},
   ): RunResult {
     const events = this.bus.getEvents()
@@ -561,6 +776,15 @@ export class Orchestrator {
       executed: opts.executed ?? false,
       overrideApproved: opts.overrideApproved ?? null,
     })
+    let latency: BreakerLatencyReport | null =
+      opts.latency !== undefined ? opts.latency : null
+    if (latency === null) {
+      const latEvent = events.find((e) => e.kind === 'breaker.latency')
+      const detail = latEvent?.detail
+      if (detail && typeof detail === 'object' && 'latency' in detail) {
+        latency = detail.latency as BreakerLatencyReport
+      }
+    }
     return {
       messages: this.bus.getMessages(),
       events,
@@ -569,6 +793,7 @@ export class Orchestrator {
       awaitingOverride,
       finalSummary,
       metrics,
+      latency,
     }
   }
 }

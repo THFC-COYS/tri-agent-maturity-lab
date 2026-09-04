@@ -16,7 +16,7 @@ describe("stub tools and agents", () => {
     expect(he.ok).toBe(true)
     const ef = (ent.data as { facts: string[] }).facts
     const hf = (he.data as { facts: string[] }).facts
-    expect(ef[0]).toMatch(/pipeline|West/i)
+    expect(ef[0]).toMatch(/PDU|breaker|rack/i)
     expect(hf[0]).toMatch(/STEM|census|student/i)
   })
 

@@ -21,18 +21,18 @@ export function runPlanner(
 
   const highRisk =
     /irreversible|terminate|expel|fire|delete|purge/i.test(prompt) ||
-    /urgent.*risk|critical/i.test(prompt)
+    /urgent.*risk|\bcritical\b/i.test(prompt)
 
   const proposedAction: ProposedAction = {
     id: `act-${skin}-plan`,
     title:
       skin === 'highered'
         ? 'Launch coordinated student outreach wave'
-        : 'Launch coordinated pipeline recovery play',
+        : 'Shed non-critical rack load (breaker-amp protection)',
     description:
       skin === 'highered'
         ? `Execute advising outreach for at-risk students based on: ${prompt.slice(0, 120)}`
-        : `Execute revenue ops recovery based on: ${prompt.slice(0, 120)}`,
+        : `Dispatch rack shed before soft-plant trip based on: ${prompt.slice(0, 120)}`,
     risk: highRisk ? 'high' : findings.length > 2 ? 'medium' : 'low',
     reversible: !highRisk,
   }
