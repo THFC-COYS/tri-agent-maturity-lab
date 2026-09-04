@@ -635,8 +635,8 @@ export class Orchestrator {
       decision: 'allowed',
       actor: 'policy-gate+executor+robot',
       detail: tripped
-        ? `Shed after trip window (${latency.sensorToShedMs} ms > ${latency.timeToTripMs} ms). Soft-plant tripped.`
-        : `Shed before trip (${latency.sensorToShedMs} ms ≤ budget ${latency.tripBudgetMs} ms). Load now ${latency.loadAmpsAfterShed} A.`,
+        ? `Shed after true trip window (${latency.sensorToShedMs} ms > ${latency.trueTimeToTripMs} ms). Soft-plant tripped.`
+        : `Shed before trip (${latency.sensorToShedMs} ms ≤ budget ${latency.tripBudgetMs} ms; beat curve ${latency.shedBeatCurve}). Load now ${latency.loadAmpsAfterShed} A.`,
     })
 
     this.bus.publishSystem(

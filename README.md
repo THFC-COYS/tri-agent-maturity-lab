@@ -158,13 +158,14 @@ MIT © Greg Lucas
 
 ## Breaker-amp latency alpha
 
-Soft-plant digital alpha: sensor to Stage-4 policy gate to shed, measured in real ms against an assumed 50 ms budget.
+Soft-plant digital alpha: sensor to Stage-4 policy gate to shed, measured in real ms.
 
 Story: agent sheds load before the soft-plant opens.
-- Plant: stub load toward 48 A with ~50 ms headroom.
-- Path: Enterprise Stage-4 gated auto shed; audit on.
-- Report: published ms for sensor/gate/shed vs 50 ms budget.
-- Honesty: soft-plant only, not field hardware.
+- **Free plant:** stub load toward 48 A with ~50 ms headroom (baseline curve).
+- **Hard plant (Monday Garage bet):** same loop with sensor noise, delayed/jittered reads, intermittent lag, tighter headroom / faster rise (~22 ms budget). Trip uses true load.
+- Path: Enterprise Stage-4 gated auto shed; audit on. UI shows HARD MODE + shed-beat-curve.
+- Report: published ms for sensor/gate/shed vs trip budget (50 ms free / ~22 ms hard).
+- Honesty: still a soft-plant — harder physics in simulation only. Not a physical breaker. Not a fourth product brand.
 
 Higher-Ed Stage-4 keeps human override.
-Demo: zero API keys. Tests cover happy path and delayed fail path.
+Demo: zero API keys. Tests cover free happy/fail paths plus hard late-trip and hard in-budget shed.
