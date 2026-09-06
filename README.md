@@ -1,171 +1,38 @@
-# Tri-Agent Maturity Lab
+The rack never trips because the agent already moved.
 
-**Ship the proof, not the slide deck.**
+**Hard mode:** `0.4 ms` sensor→shed vs ~`22 ms` budget (noise + delay).
 
-An interactive TypeScript lab for the **AGENT Framework**, a **tri-agent workforce**, and the **4-Stage AI Maturity Model**. Dual skins (Enterprise Ops · Higher Education). Stage switches change real control flow. Zero API keys. MIT.
+**Honesty upfront:** this is a simulated soft plant, not a physical breaker. It models noisy, delayed sensor reads and a true-load trip curve; no hardware is involved.
 
-## Why this exists
-
-Leaders keep asking:
-
-- How do we move from copilots to accountable multi-agent work?
-- Does that playbook transfer from the enterprise floor to campus operations?
-
-This lab answers with **working software**. Pick a skin, pick a stage, hit **Run scenario**, and read the conversation, evaluation scores, and trace. Stage 4 stops and asks you to approve or reject before the final action — including a stub robot/actuator handoff.
-
-Built for operators and educators who want AI × business and AI × higher-ed fluency.
-
-## Design principle (controversial on purpose)
-
-**Chat UIs are a Stage-1 trap.**
-
-If your "AI strategy" is another prompt box where a human still does every irreversible step, you are practicing Assisted mode with nicer typography. Maturity is control flow: tools, coordination, policy gates, audit, and physical-digital handoff — not longer chat transcripts. This lab makes that visible. Stay in Stage 1 long enough and you will confuse conversation for capability.
-
-Optional adjacent thinking on breaking page-shaped assumptions: [pAIgeBreaker](https://paigebreaker.com).
-
-## Tri-agent workforce
-
-**Tri-agent = human + AI agents + simulated robotics.**
-
-| Lane | Role in the lab |
-|------|-----------------|
-| Human | Owns Stage 1 work; approves/rejects at Stage 4 |
-| AI agents | Researcher · Planner · Executor (stub tools, no LLM keys) |
-| Robot / actuator | Stub physical-digital handoff via `dispatch_actuator` |
-
-Specialists still matter (research → plan → execute). The third lane is the **actuator**: digital plan → simulated physical dispatch. No hardware, no secrets — just an honest stub so handoff to the floor or campus is not hand-waved.
-
-## AGENT Framework (concrete steps)
-
-| Phase | What happens in the lab |
-|-------|-------------------------|
-| **Assess** | Context pull (`lookup_context`), priority scoring (`score_priority`) |
-| **Generate** | Plan (`draft_plan`) and proposed action |
-| **Evaluate** | Risk narrative + `simulate_action` |
-| **Navigate** | Orchestrator routes work across roles by stage policy |
-| **Track** | Stub ledger + robot/actuator handoff + follow-up note |
-
-## 4-Stage maturity (behavior, not labels)
-
-| Stage | Name | Real control flow |
-|-------|------|-------------------|
-| 1 | Assisted | Single suggestion. Human does the work. No tools. |
-| 2 | Augmented | One tool-using agent proposes a plan. |
-| 3 | Coordinated | Orchestrator runs researcher → planner → executor → robot. |
-| 4 | Governed | Same multi-agent path + policy gate + audit + human override. |
-
-## Evaluation harness
-
-Every run emits **deterministic** metrics (same inputs → same scores):
-
-- **Decision quality** — process completeness vs stage expectations
-- **Cycle time** — simulated ms from stage / tools / agents / handoff
-- **Cost** — relative units (agents × tools × stage weight)
-- **Risk** — residual risk after path taken (including override)
-
-No randomness. No network. Fit for demos and tests.
-
-## Architecture
-
-```mermaid
-flowchart TB
-  subgraph UI["React UI"]
-    Skin[Skin switcher]
-    Stage[Stage selector]
-    Run[Run / Override]
-    Conv[Conversation]
-    Eval[Evaluation panel]
-    Trace[Trace + Audit]
-  end
-
-  subgraph Kernel["in-process kernel"]
-    Orch[Orchestrator]
-    Policy[Stage policies]
-    Bus[Agent bus]
-    Audit[Audit log]
-    Harness[Evaluation harness]
-  end
-
-  subgraph Agents["Tri-agent lanes"]
-    Human[Human]
-    AI[Researcher / Planner / Executor]
-    Robot[Robot / actuator stub]
-  end
-
-  subgraph Tools["Deterministic stubs"]
-    T1[lookup_context]
-    T2[score_priority]
-    T3[draft_plan]
-    T4[simulate_action]
-    T5[dispatch_actuator]
-    T6[breaker soft-plant]
-  end
-
-  Skin --> Orch
-  Stage --> Policy
-  Run --> Orch
-  Orch --> Policy
-  Orch --> Bus
-  Orch --> AI 
-  Orch --> Robot
-  Orch --> Human
-  AI --> Tools
-  Robot --> T5
-  Orch --> T6
-  Bus --> Conv
-  Bus --> Trace
-  Orch --> Audit
-  Orch --> Harness
-  Harness --> Eval
-  Audit --> Trace
-```
-
-## Skins
-
-- **Enterprise Ops** — rack protection, breaker-amp headroom, governed shed
-- **Higher Education** — STEM retention, advising outreach, early alerts
-
-Same kernel. Different facts, verbs, and copy.
-
-## Quick start
+## See it in 90 seconds
 
 ```bash
-npm install
-npm run dev
+npm install && npm run dev
 ```
 
-Open the URL Vite prints (usually `http://localhost:5173`).
+Then choose **Enterprise Ops → Stage 4 → Hard mode** and run the scenario. Vite prints the local URL. There is no live demo URL right now; public deployment is paused.
+
+## What this proves
+
+This TypeScript lab makes a governed multi-agent control loop visible:
+
+1. A noisy, delayed sensor read arrives.
+2. Researcher → Planner → Executor turn it into a shed action.
+3. Stage 4 applies a policy gate, audit trail, and human override.
+4. The simulated actuator sheds load before the simulated trip curve—or records a late trip.
+
+The three lanes are **human**, **AI agents**, and a **simulated actuator**. The point is control flow, not a chat transcript: the path, timing, decision, and audit are inspectable and deterministic.
+
+## Why the number matters
+
+Hard mode adds sensor noise, read delay, jitter, and tighter headroom. The lab reports sensor→shed time against the ~22 ms trip budget so the result is measurable rather than a slide-deck claim. It is a simulation, not a claim about physical breaker performance.
+
+## Run the checks
 
 ```bash
 npm test
 npm run build
 ```
 
-No `.env`. No API keys. No backend.
+No API keys. No backend. MIT © Greg Lucas.
 
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `npm run dev` | Vite dev server |
-| `npm test` | Vitest (deterministic kernel / agents / harness) |
-| `npm run build` | `tsc -b` + production bundle |
-| `npm run lint` | oxlint |
-
-## License
-
-MIT © Greg Lucas
-
-## Breaker-amp latency alpha
-
-Soft-plant digital alpha: sensor to Stage-4 policy gate to shed, measured in real ms.
-
-Story: agent sheds load before the soft-plant opens.
-- **Free plant:** stub load toward 48 A with ~50 ms headroom (baseline curve).
-- **Hard plant (Monday Garage bet):** same loop with sensor noise, delayed/jittered reads, intermittent lag, tighter headroom / faster rise (~22 ms budget). Trip uses true load.
-- Path: Enterprise Stage-4 gated auto shed; audit on. UI shows HARD MODE + shed-beat-curve.
-- Report: published ms for sensor/gate/shed vs trip budget (50 ms free / ~22 ms hard).
-- Honesty: still a soft-plant — harder physics in simulation only. Not a physical breaker. Not a fourth product brand.
-
-Higher-Ed Stage-4 keeps human override.
-Demo: zero API keys. Tests cover free happy/fail paths plus hard late-trip and hard in-budget shed.
