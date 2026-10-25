@@ -21,6 +21,9 @@ export class AuditLog {
       floorApplied: partial.floorApplied,
       approvedBy: partial.approvedBy,
       approvedAt: partial.approvedAt,
+      drillId: partial.drillId,
+      humanClockMs: partial.humanClockMs,
+      systemClockMs: partial.systemClockMs,
     }
     this.entries.push(entry)
     return entry
@@ -43,7 +46,14 @@ export class AuditLog {
     detail?: string,
     gate?: Pick<
       AuditEntry,
-      'tier' | 'scoreInputs' | 'floorApplied' | 'approvedBy' | 'approvedAt'
+      | 'tier'
+      | 'scoreInputs'
+      | 'floorApplied'
+      | 'approvedBy'
+      | 'approvedAt'
+      | 'drillId'
+      | 'humanClockMs'
+      | 'systemClockMs'
     >,
   ): AuditEntry {
     return {
@@ -60,6 +70,9 @@ export class AuditLog {
       floorApplied: gate?.floorApplied,
       approvedBy: gate?.approvedBy,
       approvedAt: gate?.approvedAt,
+      drillId: gate?.drillId,
+      humanClockMs: gate?.humanClockMs,
+      systemClockMs: gate?.systemClockMs,
     }
   }
 }

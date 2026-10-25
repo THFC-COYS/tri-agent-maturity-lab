@@ -152,6 +152,15 @@ export interface AuditEntry {
   /** Who approved a Tier 3 action via human override, and when (ms epoch). */
   approvedBy?: string
   approvedAt?: number
+  /**
+   * Kill-switch drill record. Present only on the entry a drill writes:
+   * the drill id, and the drill's two clocks (see killSwitchDrill.ts).
+   * humanClockMs is alert presented to human decision; systemClockMs is
+   * stop signal to the run reaching its final halted state.
+   */
+  drillId?: string
+  humanClockMs?: number
+  systemClockMs?: number
 }
 
 export interface ScenarioConfig {
