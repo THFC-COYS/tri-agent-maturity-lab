@@ -37,6 +37,15 @@ One rule sits above the scoring: the **hard floor**. Actions in the send, pay, d
 
 Every gated action writes its tier, its scoring inputs, and (for Tier 3 approvals) the approver and timestamp to the audit log. The scoring fields on audit entries are additive and optional, so audit records written before tiers existed stay valid.
 
+### Kill-switch drill: two clocks
+
+A tier table only matters if a human can actually stop the run in time. The kill-switch drill exercises the real Stage 4 override path against a Tier 3 action and reports two clocks into the same audit record, next to the tier score:
+
+- **Human clock:** alert presented to human decision. Notice, decide, act.
+- **System clock:** stop signal to the run fully halted. The same discipline as the breaker latency budget, started by a person instead of a sensor.
+
+Both clocks land in the audit trail with the tier, the scoring inputs, and the approver. A drill that cannot produce both numbers fails loudly and writes no record. The drill is run quarterly and unannounced. The system clock is held to its millisecond budget (the ~22 ms hard reference); the human clock has no per-run budget, because its trend across drills, not any single run, is the board-level metric.
+
 ## Why the number matters
 
 Hard mode adds sensor noise, read delay, jitter, and tighter headroom. The lab reports sensor→shed time against the ~22 ms trip budget so the result is measurable rather than a slide-deck claim. It is a simulation, not a claim about physical breaker performance.
