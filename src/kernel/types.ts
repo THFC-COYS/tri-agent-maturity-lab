@@ -58,12 +58,50 @@ export interface ToolResult {
   data: unknown
 }
 
+/** Policy gate tiers: Tier 1 run free, Tier 2 notify, Tier 3 wait for a human. */
+export type GateTier = 1 | 2 | 3
+
+/**
+ * What kind of action is proposed. The classes send / pay / delete / publish
+ * are floor classes: the Stage 4 gate scores them Tier 3 no matter what the
+ * other inputs claim.
+ */
+export type ActionClass =
+  | 'research'
+  | 'draft'
+  | 'internal'
+  | 'notify'
+  | 'send'
+  | 'pay'
+  | 'delete'
+  | 'publish'
+  | 'other'
+
+/** How much damage a bad run could do if the action goes wrong. */
+export type BlastRadius = 'low' | 'medium' | 'high'
+
+/** The inputs the policy gate scores before it assigns a tier. */
+export interface ScoreInputs {
+  actionClass: ActionClass
+  reversible: boolean
+  blastRadius: BlastRadius
+  /** True when the action's effect leaves this system (an email sent, an API called, money moved). */
+  leavesSystem: boolean
+}
+
 export interface ProposedAction {
   id: string
   title: string
   description: string
   risk: 'low' | 'medium' | 'high'
   reversible: boolean
+  /**
+   * Optional gate-scoring fields. When absent, the gate derives them
+   * deterministically (see scoreActionTier in gateTiers.ts).
+   */
+  actionClass?: ActionClass
+  blastRadius?: BlastRadius
+  leavesSystem?: boolean
 }
 
 
@@ -103,6 +141,17 @@ export interface AuditEntry {
   decision: 'allowed' | 'blocked' | 'overridden' | 'approved'
   actor: string
   detail?: string
+  /**
+   * Gate-scoring record. Optional so audit entries written before tiers
+   * existed (and non-gate entries) stay valid; policy entries carry them.
+   */
+  tier?: GateTier
+  scoreInputs?: ScoreInputs
+  /** True when the hard floor forced Tier 3 regardless of scoring inputs. */
+  floorApplied?: boolean
+  /** Who approved a Tier 3 action via human override, and when (ms epoch). */
+  approvedBy?: string
+  approvedAt?: number
 }
 
 export interface ScenarioConfig {
@@ -156,6 +205,12 @@ export interface RunResult {
 export interface OverrideDecision {
   approved: boolean
   note?: string
+  /**
+   * Who is deciding. Recorded on the audit entry as approvedBy for
+   * approvals; when absent the orchestrator records its default human
+   * actor label.
+   */
+  approver?: string
 }
 
 export const STAGE_META: Record<
