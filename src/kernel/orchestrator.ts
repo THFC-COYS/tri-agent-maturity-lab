@@ -2,6 +2,7 @@ import { AgentBus } from './agentBus'
 import { AuditLog } from './auditLog'
 import { createEvent, resetEventSeq } from './events'
 import { evaluatePolicyGate, getPolicy } from './stagePolicies'
+import { scoreActionTier } from './gateTiers'
 import type {
   BreakerLatencyReport,
   MaturityStage,
@@ -94,6 +95,8 @@ export class Orchestrator {
         decision: 'approved',
         actor: 'human',
         detail: decision.note ?? 'Approved via override panel',
+        approvedBy: decision.approver ?? 'human',
+        approvedAt: Date.now(),
       })
       this.bus.emit(
         createEvent({
@@ -398,7 +401,7 @@ export class Orchestrator {
         stage: 4,
         skin: input.skin,
         summary: gate.allowed
-          ? 'Policy gate: within envelope (still requires human override at Stage 4).'
+          ? `Policy gate: Tier ${gate.tier} (still requires human override at Stage 4).`
           : `Policy gate: ${gate.reason}`,
         detail: { gate, action },
       }),
@@ -413,6 +416,9 @@ export class Orchestrator {
       decision: 'blocked',
       actor: 'policy-gate',
       detail: gate.reason + ' Awaiting human override.',
+      tier: gate.tier,
+      scoreInputs: gate.inputs,
+      floorApplied: gate.floorApplied,
     })
     this.bus.emit(
       createEvent({
@@ -503,12 +509,14 @@ export class Orchestrator {
         stage: 4,
         skin: input.skin,
         summary: gate.allowed
-          ? 'Policy gate: shed within envelope — auto-dispatch on breaker-critical path.'
+          ? `Policy gate: Tier ${gate.tier} shed within envelope — auto-dispatch on breaker-critical path.`
           : `Policy gate: ${gate.reason}`,
         detail: { gate, action },
       }),
     )
 
+    // Auto path: Tier 1 (run free) and Tier 2 (notify, audit-logged below)
+    // proceed; Tier 3 must not auto-execute, so the shed is withheld.
     if (!gate.allowed) {
       const entry = this.audit.record({
         stage: 4,
@@ -517,6 +525,9 @@ export class Orchestrator {
         decision: 'blocked',
         actor: 'policy-gate',
         detail: gate.reason + ' Shed withheld.',
+        tier: gate.tier,
+        scoreInputs: gate.inputs,
+        floorApplied: gate.floorApplied,
       })
       this.bus.emit(
         createEvent({
@@ -637,6 +648,9 @@ export class Orchestrator {
       detail: tripped
         ? `Shed after true trip window (${latency.sensorToShedMs} ms > ${latency.trueTimeToTripMs} ms). Soft-plant tripped.`
         : `Shed before trip (${latency.sensorToShedMs} ms ≤ budget ${latency.tripBudgetMs} ms; beat curve ${latency.shedBeatCurve}). Load now ${latency.loadAmpsAfterShed} A.`,
+      tier: gate.tier,
+      scoreInputs: gate.inputs,
+      floorApplied: gate.floorApplied,
     })
 
     this.bus.publishSystem(
@@ -724,6 +738,7 @@ export class Orchestrator {
     })
 
     if (input.stage === 4) {
+      const score = scoreActionTier(action)
       this.audit.record({
         stage: 4,
         skin: input.skin,
@@ -731,6 +746,9 @@ export class Orchestrator {
         decision: 'allowed',
         actor: fromOverride ? 'human+executor+robot' : 'executor+robot',
         detail: 'Simulated execution + actuator handoff recorded',
+        tier: score.tier,
+        scoreInputs: score.inputs,
+        floorApplied: score.floorApplied,
       })
     }
 

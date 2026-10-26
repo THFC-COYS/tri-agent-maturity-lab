@@ -16,6 +16,14 @@ export class AuditLog {
       decision: partial.decision,
       actor: partial.actor,
       detail: partial.detail,
+      tier: partial.tier,
+      scoreInputs: partial.scoreInputs,
+      floorApplied: partial.floorApplied,
+      approvedBy: partial.approvedBy,
+      approvedAt: partial.approvedAt,
+      drillId: partial.drillId,
+      humanClockMs: partial.humanClockMs,
+      systemClockMs: partial.systemClockMs,
     }
     this.entries.push(entry)
     return entry
@@ -36,6 +44,17 @@ export class AuditLog {
     decision: AuditEntry['decision'],
     actor: string,
     detail?: string,
+    gate?: Pick<
+      AuditEntry,
+      | 'tier'
+      | 'scoreInputs'
+      | 'floorApplied'
+      | 'approvedBy'
+      | 'approvedAt'
+      | 'drillId'
+      | 'humanClockMs'
+      | 'systemClockMs'
+    >,
   ): AuditEntry {
     return {
       id: nextId('audit'),
@@ -46,6 +65,14 @@ export class AuditLog {
       decision,
       actor,
       detail,
+      tier: gate?.tier,
+      scoreInputs: gate?.scoreInputs,
+      floorApplied: gate?.floorApplied,
+      approvedBy: gate?.approvedBy,
+      approvedAt: gate?.approvedAt,
+      drillId: gate?.drillId,
+      humanClockMs: gate?.humanClockMs,
+      systemClockMs: gate?.systemClockMs,
     }
   }
 }
