@@ -24,6 +24,10 @@ export class AuditLog {
       drillId: partial.drillId,
       humanClockMs: partial.humanClockMs,
       systemClockMs: partial.systemClockMs,
+      actionProposedBy: partial.actionProposedBy,
+      executionStagedWith: partial.executionStagedWith,
+      stopLandedOn: partial.stopLandedOn,
+      stopAttribution: partial.stopAttribution,
     }
     this.entries.push(entry)
     return entry
@@ -54,6 +58,10 @@ export class AuditLog {
       | 'drillId'
       | 'humanClockMs'
       | 'systemClockMs'
+      | 'actionProposedBy'
+      | 'executionStagedWith'
+      | 'stopLandedOn'
+      | 'stopAttribution'
     >,
   ): AuditEntry {
     return {
@@ -73,6 +81,10 @@ export class AuditLog {
       drillId: gate?.drillId,
       humanClockMs: gate?.humanClockMs,
       systemClockMs: gate?.systemClockMs,
+      actionProposedBy: gate?.actionProposedBy,
+      executionStagedWith: gate?.executionStagedWith,
+      stopLandedOn: gate?.stopLandedOn,
+      stopAttribution: gate?.stopAttribution,
     }
   }
 }

@@ -46,6 +46,8 @@ A tier table only matters if a human can actually stop the run in time. The kill
 
 Both clocks land in the audit trail with the tier, the scoring inputs, and the approver. A drill that cannot produce both numbers fails loudly and writes no record. The drill is run quarterly and unannounced. The system clock is held to its millisecond budget (the ~22 ms hard reference); the human clock has no per-run budget, because its trend across drills, not any single run, is the board-level metric.
 
+The drill record also carries **stop attribution**, reconstructed from the paused run's own event trace: which agent proposed the action the run paused on (in this pipeline, the planner), which agent was staged to execute it (the executor, which had already simulated it), and where each participating agent stood when the alert was presented: completed, its action under review, or staged to execute. A stop lands on the staged agent, because its pending execution is the work the stop cancels. Attribution answers "whose work did the stop interrupt, and who had already finished" without pretending to per-agent halt latencies: the system clock stays a whole-loop measurement, and a drill whose trace cannot identify its proposer and its staged executor fails loudly, exactly like a drill with a missing clock.
+
 ## Why the number matters
 
 Hard mode adds sensor noise, read delay, jitter, and tighter headroom. The lab reports sensor→shed time against the ~22 ms trip budget so the result is measurable rather than a slide-deck claim. It is a simulation, not a claim about physical breaker performance.

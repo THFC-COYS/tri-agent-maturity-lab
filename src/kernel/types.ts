@@ -161,6 +161,44 @@ export interface AuditEntry {
   drillId?: string
   humanClockMs?: number
   systemClockMs?: number
+  /**
+   * Kill-switch drill stop attribution. Present only on the entry a
+   * drill writes: which agent proposed the halted action, which agent
+   * was staged to execute it, where a stop landed, and the per-agent
+   * breakdown (see AgentStopAttribution in this file and
+   * killSwitchDrill.ts).
+   */
+  actionProposedBy?: AgentRole
+  executionStagedWith?: AgentRole
+  stopLandedOn?: AgentRole | null
+  stopAttribution?: AgentStopAttribution[]
+}
+
+/**
+ * One agent's part in a kill-switch drill, reconstructed from the
+ * paused run's real event trace. Attribution names roles and states;
+ * it does not fabricate per-agent halt latencies: the system clock
+ * stays a whole-loop measurement, and this record says where in the
+ * loop the stop landed.
+ */
+export interface AgentStopAttribution {
+  agent: AgentRole
+  /** Phases the agent worked in during the run, in first-seen order. */
+  phases: AgentPhase[]
+  /** Trace events the agent emitted before the alert was presented. */
+  eventCount: number
+  /** Position of the agent's last event in the run trace (0-based). */
+  lastEventIndex: number
+  /** True for the agent that proposed the action the run paused on. */
+  proposedAction: boolean
+  /** True for the agent staged to execute the action after the gate. */
+  stagedToExecute: boolean
+  /**
+   * Where the agent stood when the alert was presented: it had
+   * completed its work, its proposal was the action under review, or
+   * it was staged to execute that action.
+   */
+  stateAtAlert: 'completed' | 'action-under-review' | 'staged-to-execute'
 }
 
 export interface ScenarioConfig {
