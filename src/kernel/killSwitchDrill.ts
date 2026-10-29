@@ -3,12 +3,16 @@ import { scoreActionTier } from './gateTiers'
 import { HARD_TRIP_BUDGET_MS, nowMs } from './breakerPlant'
 import { createEvent, nextId } from './events'
 import type {
+  AgentPhase,
+  AgentRole,
+  AgentStopAttribution,
   AuditEntry,
   GateTier,
   OverrideDecision,
   ProposedAction,
   ScoreInputs,
   SkinId,
+  TraceEvent,
 } from './types'
 
 /**
@@ -38,6 +42,19 @@ import type {
  * Fail loudly: a drill that cannot produce both clocks never writes a
  * successful record. validateDrillRecord throws KillSwitchDrillError,
  * and the drill runs it before its audit entry is written.
+ *
+ * STOP ATTRIBUTION: the two clocks are whole-loop measurements, and
+ * this drill also says where in the loop the stop landed. The paused
+ * run's event trace is reconstructed into a per-agent record: which
+ * agent proposed the action the run paused on, which agent was staged
+ * to execute it, and where every participating agent stood when the
+ * alert was presented (completed, its action under review, or staged
+ * to execute). A stop lands on the staged agent: its pending execution
+ * is the work the stop cancels. Attribution is structural, read off
+ * the real trace; the drill does not invent per-agent halt latencies
+ * the synchronous machinery never measured. A drill whose trace
+ * cannot identify its proposer and its staged executor fails loudly
+ * like a drill with a missing clock.
  */
 
 export class KillSwitchDrillError extends Error {
@@ -116,17 +133,106 @@ export interface KillSwitchDrillResult {
   approver: string
   /** True when the responder pressed stop (rejected) and nothing executed. */
   stopped: boolean
+  /** Per-agent stop attribution from the paused run's event trace. */
+  stopAttribution: AgentStopAttribution[]
+  /** The agent that proposed the action the run paused on. */
+  actionProposedBy: AgentRole
+  /** The agent staged to execute the action once the gate cleared. */
+  executionStagedWith: AgentRole
+  /**
+   * Where a stop landed: the staged agent, whose pending execution
+   * the stop cancelled. Null when the responder approved the action
+   * (no stop, so no landing).
+   */
+  stopLandedOn: AgentRole | null
   /** Id of the audit entry carrying both clocks. Find it by drillId too. */
   auditEntryId: string
 }
 
 /**
+ * Reconstruct per-agent stop attribution from the paused run's event
+ * trace. The proposer is the agent on the action.proposed event; the
+ * staged executor is the agent working the evaluate phase, where the
+ * pending action is simulated before the gate. Throws
+ * KillSwitchDrillError when the trace cannot identify either one.
+ */
+export function buildStopAttribution(events: TraceEvent[]): {
+  attribution: AgentStopAttribution[]
+  actionProposedBy: AgentRole
+  executionStagedWith: AgentRole
+} {
+  const byAgent = new Map<
+    AgentRole,
+    { phases: AgentPhase[]; eventCount: number; lastEventIndex: number }
+  >()
+  let proposer: AgentRole | undefined
+  let staged: AgentRole | undefined
+  events.forEach((event, index) => {
+    if (event.kind === 'action.proposed' && event.agent) {
+      proposer = event.agent
+    }
+    if (event.phase === 'evaluate' && event.agent) {
+      staged = event.agent
+    }
+    if (!event.agent) return
+    const record = byAgent.get(event.agent) ?? {
+      phases: [] as AgentPhase[],
+      eventCount: 0,
+      lastEventIndex: -1,
+    }
+    record.eventCount += 1
+    record.lastEventIndex = index
+    if (event.phase && !record.phases.includes(event.phase)) {
+      record.phases.push(event.phase)
+    }
+    byAgent.set(event.agent, record)
+  })
+  if (!proposer) {
+    throw new KillSwitchDrillError(
+      'Kill-switch drill could not attribute its stop: the paused run trace has no action.proposed event with an agent, so the proposer is unknown. No record was written.',
+    )
+  }
+  if (!staged) {
+    throw new KillSwitchDrillError(
+      'Kill-switch drill could not attribute its stop: the paused run trace has no evaluate-phase agent, so the staged executor is unknown. No record was written.',
+    )
+  }
+  const attribution: AgentStopAttribution[] = [...byAgent.entries()]
+    .map(([agent, record]) => ({
+      agent,
+      phases: record.phases,
+      eventCount: record.eventCount,
+      lastEventIndex: record.lastEventIndex,
+      proposedAction: agent === proposer,
+      stagedToExecute: agent === staged,
+      stateAtAlert: (agent === staged
+        ? 'staged-to-execute'
+        : agent === proposer
+          ? 'action-under-review'
+          : 'completed') as AgentStopAttribution['stateAtAlert'],
+    }))
+    .sort((a, b) => a.lastEventIndex - b.lastEventIndex)
+  return {
+    attribution,
+    actionProposedBy: proposer,
+    executionStagedWith: staged,
+  }
+}
+
+/**
  * The fail-loudly gate for drill records. Throws KillSwitchDrillError
  * when either clock is missing, negative, or not a finite number.
+ * When the record carries stop attribution, also refuses attribution
+ * that is empty, does not name exactly one proposer and one staged
+ * executor, or disagrees with where the stop landed.
  */
 export function validateDrillRecord(record: {
   humanClockMs?: number
   systemClockMs?: number
+  stopped?: boolean
+  stopAttribution?: AgentStopAttribution[]
+  executionStagedWith?: AgentRole
+  stopLandedOn?: AgentRole | null
 }): void {
   for (const key of ['humanClockMs', 'systemClockMs'] as const) {
     const value = record[key]
@@ -143,6 +249,41 @@ export function validateDrillRecord(record: {
     if (value < 0) {
       throw new KillSwitchDrillError(
         `Kill-switch drill record has a negative ${key} (${value} ms); the clock ran backwards, so the drill is invalid.`,
+      )
+    }
+  }
+  if (record.stopAttribution !== undefined) {
+    const attribution = record.stopAttribution
+    if (!Array.isArray(attribution) || attribution.length === 0) {
+      throw new KillSwitchDrillError(
+        'Kill-switch drill record has empty stop attribution; a drill that cannot say where its stop landed is not a successful drill.',
+      )
+    }
+    if (attribution.filter((a) => a.proposedAction).length !== 1) {
+      throw new KillSwitchDrillError(
+        'Kill-switch drill stop attribution must name exactly one agent that proposed the paused action.',
+      )
+    }
+    if (attribution.filter((a) => a.stagedToExecute).length !== 1) {
+      throw new KillSwitchDrillError(
+        'Kill-switch drill stop attribution must name exactly one agent staged to execute the paused action.',
+      )
+    }
+    if (
+      record.stopped === true &&
+      record.stopLandedOn !== record.executionStagedWith
+    ) {
+      throw new KillSwitchDrillError(
+        `Kill-switch drill record is inconsistent: the run was stopped, but the stop landed on ${String(record.stopLandedOn)} instead of the staged executor ${String(record.executionStagedWith)}.`,
+      )
+    }
+    if (
+      record.stopped === false &&
+      record.stopLandedOn !== null &&
+      record.stopLandedOn !== undefined
+    ) {
+      throw new KillSwitchDrillError(
+        'Kill-switch drill record is inconsistent: the action was approved, so the stop cannot have landed on any agent.',
       )
     }
   }
@@ -182,6 +323,12 @@ export function runKillSwitchDrill(
     )
   }
 
+  // Stop attribution is read off the paused run's trace now, while the
+  // trace still shows the world exactly as it stood when the alert was
+  // presented (resolveOverride appends its own events later).
+  const { attribution, actionProposedBy, executionStagedWith } =
+    buildStopAttribution(orch.bus.getEvents())
+
   // HUMAN clock starts: the alert has been presented to the human.
   const alertPresentedAt = now()
 
@@ -220,6 +367,10 @@ export function runKillSwitchDrill(
     floorApplied: score.floorApplied,
     approver,
     stopped,
+    stopAttribution: attribution,
+    actionProposedBy,
+    executionStagedWith,
+    stopLandedOn: stopped ? executionStagedWith : null,
     auditEntryId: '',
   }
 
@@ -234,8 +385,8 @@ export function runKillSwitchDrill(
     decision: decision.approved ? 'approved' : 'overridden',
     actor: 'kill-switch-drill',
     detail: stopped
-      ? `Kill-switch drill ${drillId}: stop by ${approver}. Human clock ${humanClockMs} ms (alert to decision), system clock ${systemClockMs} ms (decision to halted, budget ${systemBudgetMs} ms, within budget: ${result.systemWithinBudget}). Action halted before execution.`
-      : `Kill-switch drill ${drillId}: ${approver} approved the halted action. Human clock ${humanClockMs} ms (alert to decision), system clock ${systemClockMs} ms (decision to run complete, budget ${systemBudgetMs} ms, within budget: ${result.systemWithinBudget}).`,
+      ? `Kill-switch drill ${drillId}: stop by ${approver}. Human clock ${humanClockMs} ms (alert to decision), system clock ${systemClockMs} ms (decision to halted, budget ${systemBudgetMs} ms, within budget: ${result.systemWithinBudget}). Action halted before execution. Stop attribution: proposed by ${actionProposedBy}, staged to execute with ${executionStagedWith}, stop landed on ${executionStagedWith}; every other participating agent had completed or was under review before the gate.`
+      : `Kill-switch drill ${drillId}: ${approver} approved the halted action. Human clock ${humanClockMs} ms (alert to decision), system clock ${systemClockMs} ms (decision to run complete, budget ${systemBudgetMs} ms, within budget: ${result.systemWithinBudget}). Attribution: proposed by ${actionProposedBy}, staged to execute with ${executionStagedWith}; approved, so no stop landed.`,
     tier: score.tier,
     scoreInputs: score.inputs,
     floorApplied: score.floorApplied,
@@ -244,6 +395,10 @@ export function runKillSwitchDrill(
     drillId,
     humanClockMs,
     systemClockMs,
+    actionProposedBy,
+    executionStagedWith,
+    stopLandedOn: result.stopLandedOn,
+    stopAttribution: attribution,
   })
   result.auditEntryId = entry.id
 
